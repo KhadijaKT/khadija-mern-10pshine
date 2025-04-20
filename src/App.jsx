@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import "./App.css";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import Test from "./pages/Test";
+import Profile from "./pages/Profile";
 import Home from "./pages/Home";
 import ProtectedRoute from "./components/protectedRoutes";
 import { AuthProvider } from "./context/AuthContext";
@@ -15,7 +15,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            <Route path="/test" element={<Test />} />
+            <Route path="/profile" element={<Profile />} />
             <Route
               path="/"
               element={
