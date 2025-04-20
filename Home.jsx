@@ -1,269 +1,367 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { colors } from '../styles/Themes';
-import Header from '../components/layout/Header';
-import AddNoteButton from '../components/notes/addNote';
-import NoteBlock from '../components/notes/noteBlock';
-import NoteColorPicker from '../components/notes/noteColorPicker';
-import { FiSearch, FiUser, FiPlus, FiFrown } from 'react-icons/fi';
-import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
+import React, { useState, useRef, useEffect } from "react";
+import { motion } from "framer-motion";
+import { colors } from "../../styles/Themes";
 
-const Home = () => {
-  const [notes, setNotes] = useState([]);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const [isLoading, setIsLoading] = useState(true);
-  const navigate = useNavigate();
+const NoteBlock = ({ note, onDelete, onUpdate }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editedNote, setEditedNote] = useState({ ...note });
+  const [selectedFont, setSelectedFont] = useState("Arial");
+  const contentEditableRef = useRef(null);
+  const titleEditableRef = useRef(null);
+  const containerRef = useRef(null);
+  const contentRef = useRef(null);
+  const [showMore, setShowMore] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const getAuthToken = () => {
-    return localStorage.getItem('token');
+  const handleSave = () => {
+    const newContent = contentEditableRef.current.innerHTML;
+    const newTitle = titleEditableRef.current.textContent;
+
+    onUpdate({
+      ...editedNote,
+      title: newTitle,
+      content: newContent,
+      backgroundColor: editedNote.backgroundColor,
+    });
+    setIsModalOpen(false);
+  };
+
+  const toggleStyle = (style, value) => {
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    if (range.collapsed) return;
+
+    const selectedNode = selection.anchorNode.parentNode;
+    const hasStyle =
+      (style === "fontWeight" && selectedNode.style.fontWeight === value) ||
+      (style === "fontStyle" && selectedNode.style.fontStyle === value) ||
+      (style === "textDecoration" &&
+        selectedNode.style.textDecoration === value);
+
+    if (hasStyle) {
+      const span = document.createElement("span");
+      span.style[style] = "";
+
+      const rangeClone = range.cloneRange();
+      const fragment = rangeClone.extractContents();
+      processNodes(fragment, style);
+
+      span.appendChild(fragment);
+      range.insertNode(span);
+    } else {
+      const span = document.createElement("span");
+      span.style[style] = value;
+      range.surroundContents(span);
+    }
+
+    selection.removeAllRanges();
+  };
+
+  const processNodes = (parent, style) => {
+    const childNodes = Array.from(parent.childNodes);
+    childNodes.forEach((node) => {
+      if (node.nodeType === 1) {
+        if (node.style && node.style[style]) {
+          node.style[style] = "";
+        }
+        if (node.hasChildNodes()) {
+          processNodes(node, style);
+        }
+      }
+    });
+  };
+
+  const handleBold = () => toggleStyle("fontWeight", "bold");
+  const handleItalic = () => toggleStyle("fontStyle", "italic");
+  const handleUnderline = () => toggleStyle("textDecoration", "underline");
+
+  const handleFontChange = (font) => {
+    setSelectedFont(font);
+    if (contentEditableRef.current) {
+      contentEditableRef.current.style.fontFamily = font;
+    }
+  };
+
+  const handleColorChange = (color) => {
+    setEditedNote((prev) => ({ ...prev, color }));
   };
 
   useEffect(() => {
-    const fetchNotes = async () => {
-      try {
-        const token = getAuthToken();
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const response = await axios.get('http://localhost:5176/api/notes', { headers });
-        setNotes(response.data);
-      } catch (err) {
-        console.error('Failed to fetch notes:', err.response ? err.response.data : err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchNotes();
-
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const addNote = async (color) => {
-    const newNote = {
-      title: 'New Note',
-      content: 'Start writing...',
-      fontFamily: 'Arial', // default font, can be updated from NoteBlock
-      isBold: false,
-      isItalic: false,
-      isUnderlined: false,
-      backgroundColor: color || '#ffffff',
-      textColor: '#000000',
-    };
-
-    try {
-      const token = getAuthToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await axios.post('http://localhost:5176/api/notes', newNote, { headers });
-      setNotes((prev) => [...prev, res.data]);
-    } catch (err) {
-      console.error('Failed to add note:', err.response ? err.response.data : err);
+    if (isModalOpen) {
+      setEditedNote({ ...note });
     }
+  }, [isModalOpen, note]);
 
-    setShowColorPicker(false);
-  };
-
-  const deleteNote = async (id) => {
-    try {
-      const token = getAuthToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      await axios.delete(`http://localhost:5176/api/notes/${id}`, { headers });
-      setNotes(prev => prev.filter(note => note._id !== id));
-    } catch (err) {
-      console.error('Failed to delete note:', err.response ? err.response.data : err);
-    }
-  };
-
-  const updateNote = async (updatedNote) => {
-    try {
-      const token = getAuthToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      await axios.put(`http://localhost:5176/api/notes/${updatedNote._id}`, updatedNote, { headers });
-      setNotes(prev =>
-        prev.map(note => note._id === updatedNote._id ? updatedNote : note)
+  useEffect(() => {
+    if (contentRef.current) {
+      setShowMore(
+        contentRef.current.scrollHeight > contentRef.current.clientHeight
       );
-    } catch (err) {
-      console.error('Failed to update note:', err.response ? err.response.data : err);
     }
-  };
-
-  const filteredNotes = notes.filter(note =>
-    note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    note.content.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const navigateToProfile = () => {
-    navigate('/profile');
-  };
+  }, [note.content]);
 
   return (
-    <div style={{
-      backgroundColor: colors.primary,
-      minHeight: '100vh',
-      paddingBottom: '2rem'
-    }}>
-      <Header>
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={navigateToProfile}
+    <>
+      <motion.div
+        ref={containerRef}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.3 }}
+        whileHover={{ y: -5 }}
+        onClick={() => setIsModalOpen(true)}
+        style={{
+          backgroundColor: note.backgroundColor || colors.primary,
+          borderRadius: "8px",
+          padding: "1rem",
+          boxShadow: `0 2px 4px ${colors.secondary}`,
+          minHeight: "200px",
+          display: "flex",
+          flexDirection: "column",
+          position: "relative",
+          cursor: "pointer",
+          overflow: "hidden",
+        }}
+      >
+        <h3 style={{ marginBottom: "0.5rem", color: colors.dark }}>
+          {note.title}
+        </h3>
+        <div
+          ref={contentRef}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            cursor: 'pointer',
-            marginLeft: 'auto',
-            padding: '0.5rem 1rem',
-            borderRadius: '20px',
-            backgroundColor: colors.secondary + '20',
-            color: colors.dark
-          }}
-        >
-          <FiUser size={20} />
-          {windowWidth > 768 && <span>Profile</span>}
-        </motion.div>
-      </Header>
-
-      <div style={{
-        padding: windowWidth > 768 ? '2rem' : '1rem',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        gap: '1rem'
-      }}>
-        <div style={{
-          display: 'flex',
-          width: '100%',
-          flexDirection: windowWidth < 600 ? 'column' : 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '1rem',
-          marginBottom: '1rem'
-        }}>
-          {windowWidth < 600 && (
-            <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-              <AddNoteButton onClick={() => setShowColorPicker(true)} />
-            </div>
-          )}
-
-          <div style={{
-            position: 'relative',
+            color: colors.dark,
+            whiteSpace: "pre-wrap",
+            lineHeight: "1.5",
+            fontFamily: "inherit",
             flexGrow: 1,
-            width: '100%',
-            maxWidth: windowWidth < 600 ? '100%' : '500px',
-            margin: windowWidth < 600 ? '0' : '0 auto'
-          }}>
-            <input
-              type="text"
-              placeholder="Search notes..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.75rem 1rem 0.75rem 2.5rem',
-                borderRadius: '25px',
-                border: `1px solid ${colors.secondary}`,
-                backgroundColor: colors.primary,
-                color: colors.dark,
-                fontSize: '1rem',
-                outline: 'none',
-                boxShadow: `0 2px 4px rgba(0,0,0,0.1)`,
-                transition: 'all 0.3s ease'
-              }}
-            />
-            <FiSearch style={{
-              position: 'absolute',
-              left: '1rem',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: colors.secondary,
-              fontSize: '1.2rem'
-            }} />
-          </div>
-
-          {windowWidth >= 600 && (
-            <AddNoteButton onClick={() => setShowColorPicker(true)} />
-          )}
-        </div>
-
-        {filteredNotes.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            maxHeight: "150px",
+          }}
+          dangerouslySetInnerHTML={{ __html: note.content || "" }}
+        />
+        {showMore && (
+          <div
             style={{
-              textAlign: 'center',
-              width: '100%',
-              padding: '3rem',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '1rem',
-              color: colors.secondary
+              alignSelf: "flex-end",
+              marginTop: "0.5rem",
+              color: colors.dark,
+              fontWeight: "bold",
             }}
           >
-            <FiFrown size={48} />
-            <h3>No notes found</h3>
-            <p>
-              {searchQuery ? 'Try a different search term' : 'Create your first note!'}
-            </p>
-            {!searchQuery && (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowColorPicker(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '25px',
-                  backgroundColor: colors.secondary,
-                  color: colors.dark,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  marginTop: '1rem'
-                }}
-              >
-                <FiPlus /> Add Note
-              </motion.button>
-            )}
-          </motion.div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: windowWidth < 600 ? '1fr' :
-              windowWidth < 900 ? 'repeat(2, 1fr)' :
-                'repeat(auto-fill, minmax(250px, 1fr))',
-            gap: '1.5rem',
-            width: '100%',
-            marginTop: '1rem'
-          }}>
-            <AnimatePresence>
-              {filteredNotes.map(note => (
-                <NoteBlock
-                  key={note._id}
-                  note={note}
-                  onDelete={() => deleteNote(note._id)}
-                  onUpdate={updateNote}
-                />
-              ))}
-            </AnimatePresence>
+            more...
           </div>
         )}
-      </div>
+      </motion.div>
 
-      {showColorPicker && (
-        <NoteColorPicker
-          onSelect={addNote}
-          onClose={() => setShowColorPicker(false)}
-        />
+      {/* Modal for editing */}
+      {isModalOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          style={overlayStyle}
+          onClick={() => setIsModalOpen(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9 }}
+            animate={{ scale: 1 }}
+            style={{
+              backgroundColor: editedNote.color || colors.primary,
+              borderRadius: "12px",
+              padding: "1.5rem",
+              boxShadow: `0 4px 8px ${colors.secondary}`,
+              width: "100%",
+              maxWidth: "800px",
+              maxHeight: "90vh",
+              overflow: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Toolbar */}
+            <div style={toolbarStyle}>
+              <button onClick={handleBold} style={toolbarBtnStyle}><b>B</b></button>
+              <button onClick={handleItalic} style={toolbarBtnStyle}><i>I</i></button>
+              <button onClick={handleUnderline} style={toolbarBtnStyle}><u>U</u></button>
+              <select
+                value={selectedFont}
+                onChange={(e) => handleFontChange(e.target.value)}
+                style={{ ...toolbarBtnStyle, padding: "0.25rem 0.5rem", minWidth: "120px" }}
+              >
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Verdana">Verdana</option>
+              </select>
+              <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto" }}>
+                {["#FFFFFF", "#E7F5FF", "#EBFBEE", "#FFF0F5", "#FFF9E6"].map(
+                  (color) => (
+                    <div
+                      key={color}
+                      onClick={() => handleColorChange(color)}
+                      style={{
+                        width: "24px",
+                        height: "24px",
+                        backgroundColor: color,
+                        borderRadius: "50%",
+                        cursor: "pointer",
+                        border: editedNote.color === color ? "2px solid white" : "none",
+                      }}
+                    />
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Title and Content Editors */}
+            <div
+              ref={titleEditableRef}
+              contentEditable
+              suppressContentEditableWarning
+              style={{
+                backgroundColor: "transparent",
+                borderBottom: `1px solid ${colors.secondary}`,
+                fontSize: "1.5rem",
+                fontWeight: "bold",
+                color: colors.dark,
+                outline: "none",
+                padding: "0.5rem 0",
+              }}
+            >
+              {editedNote.title}
+            </div>
+
+            <div
+              ref={contentEditableRef}
+              contentEditable
+              suppressContentEditableWarning
+              style={{
+                backgroundColor: "transparent",
+                border: "none",
+                resize: "none",
+                flexGrow: 1,
+                color: colors.dark,
+                outline: "none",
+                minHeight: "300px",
+                fontSize: "1rem",
+                whiteSpace: "pre-wrap",
+                lineHeight: "1.5",
+                fontFamily: selectedFont || "Arial",
+              }}
+              dangerouslySetInnerHTML={{ __html: editedNote.content }}
+            />
+
+            {/* Footer Buttons */}
+            <div style={footerStyle}>
+              <button onClick={() => setShowDeleteConfirm(true)} style={actionBtnStyle("#FF3333", "white")}>
+                Delete
+              </button>
+              <button onClick={() => setIsModalOpen(false)} style={actionBtnStyle(colors.secondary, colors.dark)}>
+                Cancel
+              </button>
+              <button onClick={handleSave} style={actionBtnStyle(colors.primary, colors.dark)}>
+                Save
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
       )}
-    </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={overlayStyle}
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9 }}
+            animate={{ scale: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: "#fff",
+              padding: "2rem",
+              borderRadius: "10px",
+              textAlign: "center",
+              maxWidth: "400px",
+              width: "100%",
+              boxShadow: `0 4px 10px rgba(0,0,0,0.2)`,
+            }}
+          >
+            <p style={{ marginBottom: "1.5rem", color: colors.dark }}>
+              Are you sure you want to delete this note?
+            </p>
+            <div style={{ display: "flex", justifyContent: "center", gap: "1rem" }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={actionBtnStyle("#ccc", "#000")}>
+                Cancel
+              </button>
+              <button onClick={onDelete} style={actionBtnStyle("#FF3333", "#fff")}>
+                Yes, Delete
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </>
   );
 };
 
-export default Home;
+// Reusable styles
+const overlayStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 1000,
+  padding: "1rem",
+};
+
+const toolbarStyle = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.5rem",
+  borderBottom: `1px solid #ccc`,
+  paddingBottom: "0.5rem",
+};
+
+const toolbarBtnStyle = {
+  backgroundColor: "transparent",
+  border: "1px solid #ddd",
+  padding: "0.5rem",
+  cursor: "pointer",
+  borderRadius: "4px",
+  fontSize: "1.1rem",
+};
+
+const actionBtnStyle = (bgColor, textColor) => ({
+  backgroundColor: bgColor,
+  color: textColor,
+  border: "none",
+  borderRadius: "4px",
+  padding: "0.5rem 1rem",
+  cursor: "pointer",
+  fontSize: "1rem",
+});
+
+const footerStyle = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: "1rem",
+  borderTop: `1px solid #ccc`,
+  paddingTop: "1rem",
+};
+
+export default NoteBlock;
