@@ -1,0 +1,23 @@
+.input-container {
+  margin-bottom: var(--spacing-medium);
+}
+
+.input-label {
+  display: block;
+  margin-bottom: var(--spacing-small);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.input-field {
+  width: 100%;
+  padding: var(--spacing-small);
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--secondary);
+}
