@@ -5,7 +5,7 @@ import { colors } from "../../styles/Themes";
 const NoteBlock = ({ note, onDelete, onUpdate }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editedNote, setEditedNote] = useState({ ...note });
-  const [selectedFont, setSelectedFont] = useState("Arial");
+  const [selectedFont, setSelectedFont] = useState(note.fontFamily || "Arial");
   const contentEditableRef = useRef(null);
   const titleEditableRef = useRef(null);
   const containerRef = useRef(null);
@@ -22,6 +22,7 @@ const NoteBlock = ({ note, onDelete, onUpdate }) => {
       title: newTitle,
       content: newContent,
       backgroundColor: editedNote.backgroundColor,
+      fontFamily: selectedFont
     });
     setIsModalOpen(false);
   };
@@ -91,6 +92,7 @@ const NoteBlock = ({ note, onDelete, onUpdate }) => {
   useEffect(() => {
     if (isModalOpen) {
       setEditedNote({ ...note });
+      setSelectedFont(note.fontFamily || "Arial");
     }
   }, [isModalOpen, note]);
 
@@ -101,6 +103,12 @@ const NoteBlock = ({ note, onDelete, onUpdate }) => {
       );
     }
   }, [note.content]);
+
+  useEffect(() => {
+    if (contentEditableRef.current) {
+      contentEditableRef.current.style.fontFamily = selectedFont;
+    }
+  }, [selectedFont]);
 
   return (
     <>
@@ -134,7 +142,8 @@ const NoteBlock = ({ note, onDelete, onUpdate }) => {
             color: colors.dark,
             whiteSpace: "pre-wrap",
             lineHeight: "1.5",
-            fontFamily: "inherit",
+            fontFamily: note.fontFamily || "inherit",
+            //fontFamily: "inherit",
             flexGrow: 1,
             overflow: "hidden",
             textOverflow: "ellipsis",
