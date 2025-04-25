@@ -1,4 +1,3 @@
-// In a utils/api.js or similar
 const API_BASE = "http://localhost:5000/api";
 
 export const loginUser = async (email, password) => {
